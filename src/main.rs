@@ -1,6 +1,7 @@
 use gif::*;
 use image::RgbaImage;
 use std::fs::DirEntry;
+use std::path::Path;
 use std::{env, fs, fs::File};
 
 fn main() {
@@ -17,12 +18,16 @@ fn main() {
         Ok(images) => images,
         Err(e) => panic!("{}", e.to_string()),
     };
-    images_to_gif(
+    let outpath = images_to_gif(
         images,
         &config.dir_name,
         config.delay,
         config.end_frames_delay,
     );
+    match outpath {
+        Ok(outpath) => println!("Gif created at {}", outpath),
+        Err(e) => panic!("{}", e.to_string()),
+    };
 }
 
 fn get_all_images(dir_name: &str) -> Result<Vec<RgbaImage>, &str> {
@@ -53,9 +58,17 @@ fn get_all_images(dir_name: &str) -> Result<Vec<RgbaImage>, &str> {
     Ok(images)
 }
 
-fn images_to_gif(images: Vec<RgbaImage>, dir_name: &str, delay: u16, end_frames_delay: u16) {
-    let out_path = format!("{}/../out.gif", dir_name);
-    let mut image = File::create(out_path).unwrap();
+fn images_to_gif(
+    images: Vec<RgbaImage>,
+    dir_name: &str,
+    delay: u16,
+    end_frames_delay: u16,
+) -> Result<String, &str> {
+    let path = Path::new(dir_name);
+    let parent_dir = path.parent().unwrap().to_str().unwrap();
+    let image_dir = path.file_name().unwrap().to_str().unwrap();
+    let out_path = format!("{}/{}.gif", parent_dir, image_dir);
+    let mut image = File::create(out_path.clone()).unwrap();
     let mut encoder = Encoder::new(
         &mut image,
         images[0].width() as u16,
@@ -85,6 +98,8 @@ fn images_to_gif(images: Vec<RgbaImage>, dir_name: &str, delay: u16, end_frames_
 
         println!("{} / {}", current_frame, total_frames);
     }
+    println!("Done!");
+    Ok(out_path)
 }
 
 #[derive(Debug)]
@@ -170,9 +185,19 @@ mod tests {
     fn images_to_gif_test() {
         let dir_name = "gif_test/images";
         let images = get_all_images(dir_name).unwrap();
-        images_to_gif(images, dir_name, 10, 100);
-        let outfile = fs::read(format!("{dir_name}/../out.gif"));
+        let outpath = images_to_gif(images, dir_name, 10, 100).unwrap();
+        let outfile = fs::read(outpath);
         assert_eq!(outfile.is_ok(), true);
         //fs::remove_file("gif_test/../out.gif").unwrap();
+    }
+
+    #[test]
+    fn images_to_gif_filename_eq_image_dir_name() {
+        let image_dir_name = "images";
+        let dir_name = format!("gif_test/{}", image_dir_name);
+        let images = get_all_images(dir_name.as_str()).unwrap();
+        let outpath = images_to_gif(images, dir_name.as_str(), 10, 100).unwrap();
+        assert_eq!(outpath, format!("gif_test/{image_dir_name}.gif"));
+        //fs::remove_file(format!("gif_test/{image_dir_name}.gif")).unwrap();
     }
 }
