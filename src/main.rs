@@ -17,7 +17,12 @@ fn main() {
         Ok(images) => images,
         Err(e) => panic!("{}", e.to_string()),
     };
-    images_to_gif(images, &config.dir_name, config.delay);
+    images_to_gif(
+        images,
+        &config.dir_name,
+        config.delay,
+        config.end_frames_delay,
+    );
 }
 
 fn get_all_images(dir_name: &str) -> Result<Vec<RgbaImage>, &str> {
@@ -48,7 +53,7 @@ fn get_all_images(dir_name: &str) -> Result<Vec<RgbaImage>, &str> {
     Ok(images)
 }
 
-fn images_to_gif(images: Vec<RgbaImage>, dir_name: &str, delay: u16) {
+fn images_to_gif(images: Vec<RgbaImage>, dir_name: &str, delay: u16, end_frames_delay: u16) {
     let out_path = format!("{}/../out.gif", dir_name);
     let mut image = File::create(out_path).unwrap();
     let mut encoder = Encoder::new(
@@ -71,7 +76,11 @@ fn images_to_gif(images: Vec<RgbaImage>, dir_name: &str, delay: u16) {
             &mut image.into_raw(),
             20,
         );
-        frame.delay = delay;
+        if current_frame == 1 || current_frame == total_frames {
+            frame.delay = end_frames_delay;
+        } else {
+            frame.delay = delay;
+        }
         encoder.write_frame(&frame).unwrap();
 
         println!("{} / {}", current_frame, total_frames);
@@ -82,11 +91,12 @@ fn images_to_gif(images: Vec<RgbaImage>, dir_name: &str, delay: u16) {
 struct Config {
     dir_name: String,
     delay: u16,
+    end_frames_delay: u16,
 }
 
 impl Config {
     fn new(args: &[String]) -> Result<Config, &'static str> {
-        if args.len() != 3 {
+        if args.len() != 4 {
             return Err("not enough arguments");
         }
         let dir_name = args[1].clone();
@@ -95,7 +105,15 @@ impl Config {
             Ok(time) => delay = time,
             Err(_) => return Err("invalid animation time"),
         };
-        Ok(Config { dir_name, delay })
+        let end_frames_delay = match args[3].clone().parse::<u16>() {
+            Ok(time) => time,
+            Err(_) => return Err("invalid end frames delay"),
+        };
+        Ok(Config {
+            dir_name,
+            delay,
+            end_frames_delay,
+        })
     }
 }
 
@@ -108,6 +126,7 @@ mod tests {
         let args = vec![
             String::from("program_name"),
             String::from("dir_name"),
+            String::from("10"),
             String::from("100"),
         ];
         let config = Config::new(&args);
@@ -151,7 +170,7 @@ mod tests {
     fn images_to_gif_test() {
         let dir_name = "gif_test/images";
         let images = get_all_images(dir_name).unwrap();
-        images_to_gif(images, dir_name, 10);
+        images_to_gif(images, dir_name, 10, 100);
         let outfile = fs::read(format!("{dir_name}/../out.gif"));
         assert_eq!(outfile.is_ok(), true);
         //fs::remove_file("gif_test/../out.gif").unwrap();
